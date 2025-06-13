@@ -1,190 +1,67 @@
-# Production-Ready Dockerfile for Gemini AI Chatbot
-# Optimized for free hosting platforms (Railway, Render, Fly.io) - 2025
-
-# Use official PHP 8.3 FPM Alpine image for minimal size and security
+# Simple Dockerfile for Gemini AI Chatbot
 FROM php:8.3-fpm-alpine
 
-# Set working directory
 WORKDIR /var/www/html
 
-# Install system dependencies and PHP extensions needed for production
-RUN apk add --no-cache \
-    nginx \
-    supervisor \
-    curl \
-    gettext \
-    && docker-php-ext-install \
-    opcache \
-    && rm -rf /var/cache/apk/*
+# Install nginx and supervisor
+RUN apk add --no-cache nginx supervisor curl
 
-# Copy nginx configuration template (will be processed at startup)
-COPY <<EOF /etc/nginx/nginx.template.conf
-user nginx;
-worker_processes auto;
-pid /run/nginx.pid;
-
-events {
-    worker_connections 1024;
-    use epoll;
-    multi_accept on;
-}
-
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
+# Create simple nginx config
+RUN mkdir -p /etc/nginx/conf.d
+COPY <<EOF /etc/nginx/conf.d/default.conf
+server {
+    listen 8080;
+    root /var/www/html;
+    index index.php index.html;
     
-    # Logging
-    access_log /var/log/nginx/access.log;
-    error_log /var/log/nginx/error.log warn;
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include fastcgi_params;
+    }
     
-    # Basic optimizations
-    sendfile on;
-    tcp_nopush on;
-    tcp_nodelay on;
-    keepalive_timeout 65;
-    types_hash_max_size 2048;
-    client_max_body_size 1M;
-    
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
-    
-    server {
-        listen \${PORT};
-        server_name _;
-        root /var/www/html;
-        index index.php index.html;
-        
-        # Security: disable server tokens
-        server_tokens off;
-        
-        # Handle PHP files
-        location ~ \.php$ {
-            fastcgi_pass 127.0.0.1:9000;
-            fastcgi_index index.php;
-            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-            include fastcgi_params;
-            fastcgi_read_timeout 30;
-        }
-        
-        # Serve static files
-        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
-        
-        # Security: deny access to sensitive files
-        location ~ /\.(env|git) {
-            deny all;
-            return 404;
-        }
-        
-        # Handle all other requests
-        location / {
-            try_files \$uri \$uri/ /index.php?\$query_string;
-        }
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
     }
 }
 EOF
 
-# Copy supervisor configuration
+# Create minimal nginx.conf
+COPY <<EOF /etc/nginx/nginx.conf
+events {
+    worker_connections 1024;
+}
+http {
+    include /etc/nginx/mime.types;
+    include /etc/nginx/conf.d/*.conf;
+}
+EOF
+
+# Create supervisor config
 COPY <<EOF /etc/supervisor/conf.d/supervisord.conf
 [supervisord]
 nodaemon=true
-user=root
-logfile=/var/log/supervisor/supervisord.log
-pidfile=/var/run/supervisord.pid
 
 [program:php-fpm]
 command=php-fpm
 autostart=true
 autorestart=true
-stderr_logfile=/var/log/supervisor/php-fpm.err.log
-stdout_logfile=/var/log/supervisor/php-fpm.out.log
 
 [program:nginx]
-command=sh -c 'envsubst "\$PORT" < /etc/nginx/nginx.template.conf > /etc/nginx/nginx.conf && nginx -g "daemon off;"'
+command=nginx -g "daemon off;"
 autostart=true
 autorestart=true
-stderr_logfile=/var/log/supervisor/nginx.err.log
-stdout_logfile=/var/log/supervisor/nginx.out.log
 EOF
 
-# Configure PHP for production
-COPY <<EOF /usr/local/etc/php/php.ini
-; Production PHP configuration
-; Optimized for free hosting platforms
-
-; Error handling
-display_errors = Off
-log_errors = On
-error_log = /var/log/php_errors.log
-
-; Security
-expose_php = Off
-allow_url_fopen = Off
-allow_url_include = Off
-
-; Performance
-memory_limit = 128M
-max_execution_time = 30
-max_input_time = 30
-post_max_size = 1M
-upload_max_filesize = 1M
-
-; OPcache settings for performance
-opcache.enable = 1
-opcache.memory_consumption = 64
-opcache.max_accelerated_files = 4000
-opcache.revalidate_freq = 60
-opcache.save_comments = 1
-opcache.enable_cli = 0
-
-; Session security
-session.cookie_httponly = 1
-session.use_strict_mode = 1
-session.cookie_samesite = "Strict"
-EOF
-
-# Copy application files
+# Copy app files
 COPY . .
 
-# Create startup script
-COPY <<EOF /usr/local/bin/start.sh
-#!/bin/sh
-# Set default PORT if not provided (for local development)
-export PORT=\${PORT:-8080}
+# Set permissions
+RUN chown -R nginx:nginx /var/www/html
 
-# Process nginx configuration template
-envsubst '\$PORT' < /etc/nginx/nginx.template.conf > /etc/nginx/nginx.conf
+# Expose port
+EXPOSE 8080
 
 # Start supervisor
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
-EOF
-
-# Make startup script executable
-RUN chmod +x /usr/local/bin/start.sh
-
-# Set proper permissions
-RUN chown -R nginx:nginx /var/www/html \
-    && chmod -R 755 /var/www/html \
-    && mkdir -p /var/log/supervisor /var/log/nginx /var/run \
-    && touch /var/log/php_errors.log \
-    && chown nginx:nginx /var/log/php_errors.log
-
-# Expose port (Railway will set this dynamically)
-EXPOSE $PORT
-
-# Health check for container orchestration
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:$PORT/ || exit 1
-
-# Start with custom startup script
-CMD ["/usr/local/bin/start.sh"] 
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"] 
