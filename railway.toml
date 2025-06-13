@@ -1,0 +1,43 @@
+# Railway.app Configuration for Gemini AI Chatbot
+# Railway is one of the best free hosting options for 2025
+
+[build]
+# Use the Dockerfile for consistent deployments
+builder = "dockerfile"
+
+[deploy]
+# Railway automatically detects the port from Dockerfile EXPOSE
+# But we can be explicit
+startCommand = "/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+
+# Restart policy for production reliability
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Resource limits for free tier optimization
+[deploy.resources]
+# Railway free tier includes $5/month credit
+# This configuration stays within free limits
+memory = "512MB"
+cpu = "0.5"
+
+# Environment variables (set these in Railway dashboard)
+[env]
+# These should be set in Railway's environment variables UI
+# GEMINI_API_KEY = "your-api-key-here"
+# GEMINI_MODEL_NAME = "gemini-2.0-flash-lite"
+# APP_ENV = "production"
+
+# Railway-specific features
+[networking]
+# Railway provides HTTPS automatically
+# Custom domain support available
+# Built-in DDoS protection
+
+# Monitoring and logging
+[observability]
+# Railway provides built-in metrics
+# Logs are automatically collected
+# Real-time monitoring dashboard available 
