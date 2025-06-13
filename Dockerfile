@@ -12,12 +12,13 @@ RUN apk add --no-cache \
     nginx \
     supervisor \
     curl \
+    gettext \
     && docker-php-ext-install \
     opcache \
     && rm -rf /var/cache/apk/*
 
-# Copy nginx configuration
-COPY <<EOF /etc/nginx/nginx.conf
+# Copy nginx configuration template (will be processed at startup)
+COPY <<EOF /etc/nginx/nginx.template.conf
 user nginx;
 worker_processes auto;
 pid /run/nginx.pid;
@@ -56,7 +57,7 @@ http {
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
     
     server {
-        listen 8080;
+        listen \${PORT};
         server_name _;
         root /var/www/html;
         index index.php index.html;
@@ -109,7 +110,7 @@ stderr_logfile=/var/log/supervisor/php-fpm.err.log
 stdout_logfile=/var/log/supervisor/php-fpm.out.log
 
 [program:nginx]
-command=nginx -g "daemon off;"
+command=sh -c 'envsubst "\$PORT" < /etc/nginx/nginx.template.conf > /etc/nginx/nginx.conf && nginx -g "daemon off;"'
 autostart=true
 autorestart=true
 stderr_logfile=/var/log/supervisor/nginx.err.log
@@ -155,6 +156,22 @@ EOF
 # Copy application files
 COPY . .
 
+# Create startup script
+COPY <<EOF /usr/local/bin/start.sh
+#!/bin/sh
+# Set default PORT if not provided (for local development)
+export PORT=\${PORT:-8080}
+
+# Process nginx configuration template
+envsubst '\$PORT' < /etc/nginx/nginx.template.conf > /etc/nginx/nginx.conf
+
+# Start supervisor
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+EOF
+
+# Make startup script executable
+RUN chmod +x /usr/local/bin/start.sh
+
 # Set proper permissions
 RUN chown -R nginx:nginx /var/www/html \
     && chmod -R 755 /var/www/html \
@@ -162,12 +179,12 @@ RUN chown -R nginx:nginx /var/www/html \
     && touch /var/log/php_errors.log \
     && chown nginx:nginx /var/log/php_errors.log
 
-# Expose port (Railway uses 8080, Render auto-detects)
-EXPOSE 8080
+# Expose port (Railway will set this dynamically)
+EXPOSE $PORT
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/ || exit 1
+    CMD curl -f http://localhost:$PORT/ || exit 1
 
-# Start supervisor to manage nginx and php-fpm
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"] 
+# Start with custom startup script
+CMD ["/usr/local/bin/start.sh"] 
