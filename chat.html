@@ -179,11 +179,10 @@
 
         // --- CHAT HISTORY STORAGE ---
         // Store history as {sender: 'user'/'bot', message: 'text'}
-        // This format matches what your PHP backend expects
         let chatHistory = [];
 
-        // This should point to your PHP backend script.
-        const PHP_SCRIPT_URL = window.location.origin + "/index.php";
+        // Updated to use Netlify serverless function
+        const API_URL = "/.netlify/functions/chat";
 
         function addMessageToUI(text, sender) {
           const msgDiv = document.createElement("div");
@@ -211,14 +210,14 @@
           chatBox.scrollTop = chatBox.scrollHeight; // Scroll down to show indicator
 
           try {
-            const response = await fetch(PHP_SCRIPT_URL, {
+            const response = await fetch(API_URL, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
               // Send the current message and the chat history
               body: JSON.stringify({
-                message: messageText, // Current message for direct processing if needed by PHP
+                message: messageText, // Current message for direct processing
                 chatHistory: chatHistory, // Full history for context
               }),
             });

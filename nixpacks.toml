@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["php", "curl"]
-
-[phases.build]
-cmds = ["echo 'No build needed for simple PHP app'"]
-
-[start]
-cmd = "php -S 0.0.0.0:$PORT -t ." 
