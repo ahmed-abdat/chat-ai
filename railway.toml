@@ -7,9 +7,9 @@ builder = "dockerfile"
 
 [deploy]
 # Railway automatically detects the port from Dockerfile EXPOSE
-# But we can be explicit
+# But we can be explicit about port 8080
 startCommand = "/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"
-healthcheckPath = "/"
+healthcheckPath = "/test.php"
 healthcheckTimeout = 30
 
 # Restart policy for production reliability
@@ -29,6 +29,7 @@ cpu = "0.5"
 # GEMINI_API_KEY = "your-api-key-here"
 # GEMINI_MODEL_NAME = "gemini-2.0-flash-lite"
 APP_ENV = "production"
+PORT = "8080"
 
 # Railway-specific features
 [networking]
