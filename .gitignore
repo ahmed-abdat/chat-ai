@@ -114,3 +114,10 @@ coverage/
 # Local deployment scripts
 deploy.sh
 deploy.bat 
+
+
+
+# .npm 
+.npm/
+# Local Netlify folder
+.netlify
