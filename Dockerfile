@@ -3,12 +3,11 @@ FROM php:8.3-fpm-alpine
 
 WORKDIR /var/www/html
 
-# Install required packages and PHP extensions
+# Install required packages (curl is already available in PHP 8.3)
 RUN apk add --no-cache \
     nginx \
     supervisor \
     curl \
-    && docker-php-ext-install curl \
     && adduser -D -s /bin/sh www-data
 
 # Create directories
